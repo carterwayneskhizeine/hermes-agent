@@ -108,6 +108,12 @@ DANGEROUS_PATTERNS = [
     (r'\bxargs\s+.*\brm\b', "xargs with rm"),
     (r'\bfind\b.*-exec\s+(/\S*/)?rm\b', "find -exec rm"),
     (r'\bfind\b.*-delete\b', "find -delete"),
+    # Filesystem root traversal — hangs on Windows Git Bash because MSYS maps
+    # / to the Windows root, making these commands traverse the entire drive.
+    # Also extremely slow on Linux/macOS without a specific path target.
+    (r'\bfind\s+/(?:\s|$)', "find from filesystem root (hangs on Windows Git Bash)"),
+    (r'\bfind\s+/home(?:/\s|\s|$)', "find traversal of /home (may hang on Windows Git Bash)"),
+    (r'\bls\s+(?:-\S+\s+)*-\S*R\S*\s+/\s*$', "recursive ls of filesystem root (hangs)"),
     # Gateway lifecycle protection: prevent the agent from killing its own
     # gateway process.  These commands trigger a gateway restart/stop that
     # terminates all running agents mid-work.
