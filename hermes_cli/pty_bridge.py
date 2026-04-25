@@ -7,41 +7,60 @@ keystrokes can be fed back in.  The only caller today is the
 
 Design constraints:
 
-* **POSIX-only.**  Hermes Agent supports Windows exclusively via WSL, which
-  exposes a native POSIX PTY via ``openpty(3)``.  Native Windows Python
-  has no PTY; :class:`PtyUnavailableError` is raised with a user-readable
-  install/platform message so the dashboard can render a banner instead of
-  crashing.
-* **Zero Node dependency on the server side.**  We use :mod:`ptyprocess`,
-  which is a pure-Python wrapper around the OS calls.  The browser talks
-  to the same ``hermes --tui`` binary it would launch from the CLI, so
+* **Cross-platform.**  On POSIX the bridge uses :mod:`ptyprocess` (native
+  ``openpty(3)``).  On Windows it uses :mod:`pywinpty` (ConPTY on Windows
+  10+, WinPTY fallback on older systems).  :class:`PtyUnavailableError` is
+  raised when neither backend is available.
+* **Zero Node dependency on the server side.**  We use :mod:`ptyprocess`
+  or :mod:`pywinpty`, both pure-Python wrappers around OS calls.  The browser
+  talks to the same ``hermes --tui`` binary it would launch from the CLI, so
   every TUI feature (slash popover, model picker, tool rows, markdown,
   skin engine, clarify/sudo/approval prompts) ships automatically.
-* **Byte-safe I/O.**  Reads and writes go through the PTY master fd
-  directly — we avoid :class:`ptyprocess.PtyProcessUnicode` because
-  streaming ANSI is inherently byte-oriented and UTF-8 boundaries may land
-  mid-read.
+* **Byte-safe I/O.**  Reads and writes go through the PTY master directly
+  — streaming ANSI is inherently byte-oriented and UTF-8 boundaries may land
+  mid-read.  On Windows the str-based pywinpty API is bridged to bytes at
+  the boundary.
 """
 
 from __future__ import annotations
 
-import errno
-import fcntl
 import os
-import select
-import signal
-import struct
 import sys
-import termios
 import time
 from typing import Optional, Sequence
 
-try:
-    import ptyprocess  # type: ignore
-    _PTY_AVAILABLE = not sys.platform.startswith("win")
-except ImportError:  # pragma: no cover - dev env without ptyprocess
-    ptyprocess = None  # type: ignore
-    _PTY_AVAILABLE = False
+# ---------------------------------------------------------------------------
+# Backend detection — resolved once at import time.
+# ---------------------------------------------------------------------------
+_PTY_BACKEND: str = "none"  # "posix" | "win" | "none"
+
+if sys.platform == "win32":
+    # Stubs so that type checkers don't complain about fcntl / termios etc.
+    fcntl = None  # type: ignore[assignment]
+    select = None  # type: ignore[assignment]
+    signal = None  # type: ignore[assignment]
+    termios = None  # type: ignore[assignment]
+
+    try:
+        from winpty.ptyprocess import PtyProcess as _WinPtyProcess  # type: ignore[import-untyped]
+        _PTY_BACKEND = "win"
+    except ImportError:
+        _WinPtyProcess = None  # type: ignore[assignment,misc]
+else:
+    import errno
+    import fcntl
+    import select
+    import signal
+    import struct
+    import termios
+
+    try:
+        import ptyprocess  # type: ignore[import-untyped]
+        _PTY_BACKEND = "posix"
+    except ImportError:  # pragma: no cover — dev env without ptyprocess
+        ptyprocess = None  # type: ignore[assignment]
+
+_PTY_AVAILABLE = _PTY_BACKEND != "none"
 
 
 __all__ = ["PtyBridge", "PtyUnavailableError"]
@@ -50,27 +69,28 @@ __all__ = ["PtyBridge", "PtyUnavailableError"]
 class PtyUnavailableError(RuntimeError):
     """Raised when a PTY cannot be created on this platform.
 
-    Today this means native Windows (no ConPTY bindings) or a dev
-    environment missing the ``ptyprocess`` dependency.  The dashboard
-    surfaces the message to the user as a chat-tab banner.
+    This means the ``ptyprocess`` package is missing (POSIX), the
+    ``pywinpty`` package is missing (Windows), or the platform is
+    fundamentally unsupported.  The dashboard surfaces the message to the
+    user as a chat-tab banner.
     """
 
 
 class PtyBridge:
-    """Thin wrapper around ``ptyprocess.PtyProcess`` for byte streaming.
+    """Wrapper around a PTY-backed child process for byte streaming.
 
-    Not thread-safe.  A single bridge is owned by the WebSocket handler
-    that spawned it; the reader runs in an executor thread while writes
-    happen on the event-loop thread.  Both sides are OK because the
-    kernel PTY is the actual synchronization point — we never call
-    :mod:`ptyprocess` methods concurrently, we only call ``os.read`` and
-    ``os.write`` on the master fd, which is safe.
+    Internally dispatches to ``ptyprocess`` (POSIX) or ``pywinpty`` (Windows).
+    The public API is identical on every platform.
     """
 
-    def __init__(self, proc: "ptyprocess.PtyProcess"):  # type: ignore[name-defined]
+    def __init__(self, proc, *, backend: str):
         self._proc = proc
-        self._fd: int = proc.fd
+        self._backend = backend
         self._closed = False
+        if backend == "posix":
+            self._fd: Optional[int] = proc.fd
+        else:
+            self._fd = None
 
     # -- lifecycle --------------------------------------------------------
 
@@ -96,10 +116,11 @@ class PtyBridge:
         ordinary exec failures (missing binary, bad cwd, etc.).
         """
         if not _PTY_AVAILABLE:
-            if sys.platform.startswith("win"):
+            if sys.platform == "win32":
                 raise PtyUnavailableError(
                     "Pseudo-terminals are unavailable on this platform. "
-                    "Hermes Agent supports Windows only via WSL."
+                    "Install the `pywinpty` package: pip install pywinpty "
+                    "(or pip install -e '.[pty]')."
                 )
             if ptyprocess is None:
                 raise PtyUnavailableError(
@@ -108,16 +129,25 @@ class PtyBridge:
                     "(or pip install -e '.[pty]')."
                 )
             raise PtyUnavailableError("Pseudo-terminals are unavailable.")
-        # Let caller-supplied env fully override inheritance; if they pass
-        # None we inherit the server's env (same semantics as subprocess).
+
         spawn_env = os.environ.copy() if env is None else env
-        proc = ptyprocess.PtyProcess.spawn(  # type: ignore[union-attr]
-            list(argv),
-            cwd=cwd,
-            env=spawn_env,
-            dimensions=(rows, cols),
-        )
-        return cls(proc)
+
+        if _PTY_BACKEND == "win":
+            proc = _WinPtyProcess.spawn(
+                list(argv),
+                cwd=cwd,
+                env=spawn_env,
+                dimensions=(rows, cols),
+            )
+            return cls(proc, backend="win")
+        else:
+            proc = ptyprocess.PtyProcess.spawn(
+                list(argv),
+                cwd=cwd,
+                env=spawn_env,
+                dimensions=(rows, cols),
+            )
+            return cls(proc, backend="posix")
 
     @property
     def pid(self) -> int:
@@ -146,6 +176,11 @@ class PtyBridge:
         """
         if self._closed:
             return None
+        if self._backend == "posix":
+            return self._read_posix(timeout)
+        return self._read_win(timeout)
+
+    def _read_posix(self, timeout: float) -> Optional[bytes]:
         try:
             readable, _, _ = select.select([self._fd], [], [], timeout)
         except (OSError, ValueError):
@@ -153,9 +188,8 @@ class PtyBridge:
         if not readable:
             return b""
         try:
-            data = os.read(self._fd, 65536)
+            data = os.read(self._fd, 65536)  # type: ignore[arg-type]
         except OSError as exc:
-            # EIO on Linux = slave side closed.  EBADF = already closed.
             if exc.errno in (errno.EIO, errno.EBADF):
                 return None
             raise
@@ -163,15 +197,49 @@ class PtyBridge:
             return None
         return data
 
+    def _read_win(self, timeout: float) -> Optional[bytes]:
+        import socket as _socket
+
+        proc = self._proc
+        # pywinpty's PtyProcess uses an internal socket thread for I/O.
+        # Set a timeout on the socket so recv() won't block forever.
+        try:
+            old_timeout = proc.fileobj.gettimeout()
+        except Exception:
+            old_timeout = None
+        try:
+            proc.fileobj.settimeout(timeout)
+            try:
+                text = proc.read(65536)
+            except _socket.timeout:
+                return b""
+            except EOFError:
+                return None
+            except OSError:
+                return None
+        finally:
+            try:
+                proc.fileobj.settimeout(old_timeout)
+            except OSError:
+                pass
+        if not text:
+            return b""
+        return text.encode("utf-8")
+
     def write(self, data: bytes) -> None:
         """Write raw bytes to the PTY master (i.e. the child's stdin)."""
         if self._closed or not data:
             return
-        # os.write can return a short write under load; loop until drained.
+        if self._backend == "posix":
+            self._write_posix(data)
+        else:
+            self._write_win(data)
+
+    def _write_posix(self, data: bytes) -> None:
         view = memoryview(data)
         while view:
             try:
-                n = os.write(self._fd, view)
+                n = os.write(self._fd, view)  # type: ignore[arg-type]
             except OSError as exc:
                 if exc.errno in (errno.EIO, errno.EBADF, errno.EPIPE):
                     return
@@ -180,32 +248,54 @@ class PtyBridge:
                 return
             view = view[n:]
 
+    def _write_win(self, data: bytes) -> None:
+        try:
+            self._proc.write(data.decode("utf-8"))
+        except (EOFError, OSError):
+            return
+
     def resize(self, cols: int, rows: int) -> None:
-        """Forward a terminal resize to the child via ``TIOCSWINSZ``."""
+        """Forward a terminal resize to the child process."""
         if self._closed:
             return
-        # struct winsize: rows, cols, xpixel, ypixel (all unsigned short)
+        if self._backend == "posix":
+            self._resize_posix(cols, rows)
+        else:
+            self._resize_win(cols, rows)
+
+    def _resize_posix(self, cols: int, rows: int) -> None:
         winsize = struct.pack("HHHH", max(1, rows), max(1, cols), 0, 0)
         try:
-            fcntl.ioctl(self._fd, termios.TIOCSWINSZ, winsize)
+            fcntl.ioctl(self._fd, termios.TIOCSWINSZ, winsize)  # type: ignore[union-attr]
         except OSError:
+            pass
+
+    def _resize_win(self, cols: int, rows: int) -> None:
+        try:
+            self._proc.setwinsize(rows, cols)
+        except Exception:
             pass
 
     # -- teardown ---------------------------------------------------------
 
     def close(self) -> None:
-        """Terminate the child (SIGTERM → 0.5s grace → SIGKILL) and close fds.
+        """Terminate the child and clean up.
 
-        Idempotent.  Reaping the child is important so we don't leak
-        zombies across the lifetime of the dashboard process.
+        On POSIX: SIGTERM → 0.5 s grace → SIGKILL escalation.
+        On Windows: ``terminate(force=True)`` via ConPTY.
+        Idempotent.
         """
         if self._closed:
             return
         self._closed = True
 
-        # SIGHUP is the conventional "your terminal went away" signal.
-        # We escalate if the child ignores it.
-        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGKILL):
+        if self._backend == "posix":
+            self._close_posix()
+        else:
+            self._close_win()
+
+    def _close_posix(self) -> None:
+        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGKILL):  # type: ignore[union-attr]
             if not self._proc.isalive():
                 break
             try:
@@ -215,9 +305,14 @@ class PtyBridge:
             deadline = time.monotonic() + 0.5
             while self._proc.isalive() and time.monotonic() < deadline:
                 time.sleep(0.02)
-
         try:
             self._proc.close(force=True)
+        except Exception:
+            pass
+
+    def _close_win(self) -> None:
+        try:
+            self._proc.terminate(force=True)
         except Exception:
             pass
 

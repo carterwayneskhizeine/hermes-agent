@@ -2327,16 +2327,19 @@ def _resolve_chat_argv(
     from hermes_cli.main import PROJECT_ROOT, _make_tui_argv
 
     argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
-    env: Optional[dict] = None
+    env = os.environ.copy()
 
-    if resume or sidecar_url:
-        env = os.environ.copy()
+    # Ensure the TUI's Node child_process spawns the *same* Python that
+    # runs the dashboard.  Without this, the TUI may pick up a different
+    # Python from PATH or VIRTUAL_ENV (e.g. conda base) that lacks the
+    # tui_gateway module.
+    env["HERMES_PYTHON"] = sys.executable
 
-        if resume:
-            env["HERMES_TUI_RESUME"] = resume
+    if resume:
+        env["HERMES_TUI_RESUME"] = resume
 
-        if sidecar_url:
-            env["HERMES_TUI_SIDECAR_URL"] = sidecar_url
+    if sidecar_url:
+        env["HERMES_TUI_SIDECAR_URL"] = sidecar_url
 
     return list(argv), str(cwd) if cwd else None, env
 

@@ -974,6 +974,8 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env={**os.environ, "CI": "1"},
         )
         if result.returncode != 0:
@@ -991,6 +993,8 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
                 cwd=str(tui_dir),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if result.returncode != 0:
                 combined = f"{result.stdout or ''}{result.stderr or ''}".strip()
@@ -6860,6 +6864,16 @@ def cmd_logs(args):
 
 def main():
     """Main entry point for hermes CLI."""
+    # Reconfigure stdout/stderr to UTF-8 on Windows so that Unicode symbols
+    # (✓, ✗, →, etc.) don't crash on CJK codepages (GBK / cp949 / …).
+    if sys.platform == "win32":
+        for _stream in (sys.stdout, sys.stderr):
+            if hasattr(_stream, "reconfigure"):
+                try:
+                    _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
     parser = argparse.ArgumentParser(
         prog="hermes",
         description="Hermes Agent - AI assistant with tool-calling capabilities",

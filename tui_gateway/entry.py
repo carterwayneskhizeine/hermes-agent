@@ -74,9 +74,11 @@ def _log_signal(signum: int, frame) -> None:
 # sys.exit(0) + _log_exit), which keeps the gateway alive as long as
 # the main command pipe is still readable.  Terminal signals still
 # route through _log_signal so kills and hangups are diagnosable.
-signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+if hasattr(signal, "SIGPIPE"):
+    signal.signal(signal.SIGPIPE, signal.SIG_IGN)
 signal.signal(signal.SIGTERM, _log_signal)
-signal.signal(signal.SIGHUP, _log_signal)
+if hasattr(signal, "SIGHUP"):
+    signal.signal(signal.SIGHUP, _log_signal)
 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
@@ -103,6 +105,18 @@ def _log_exit(reason: str) -> None:
 
 
 def main():
+    # Reconfigure the *real* stdout (saved before server.py swapped it to
+    # stderr) and stderr to UTF-8 on Windows so that JSON frames containing
+    # Unicode symbols (⚕, ✓, →, etc.) don't crash on CJK codepages.
+    if sys.platform == "win32":
+        from tui_gateway.server import _real_stdout
+        for _s in (_real_stdout, sys.stderr):
+            if hasattr(_s, "reconfigure"):
+                try:
+                    _s.reconfigure(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+
     _install_sidecar_publisher()
 
     if not write_json({

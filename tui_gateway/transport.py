@@ -81,8 +81,15 @@ class StdioTransport:
         try:
             with self._lock:
                 stream = self._stream_getter()
-                stream.write(line)
-                stream.flush()
+                # Bypass TextIOWrapper encoding (GBK on CJK Windows) by
+                # writing UTF-8 bytes directly to the underlying buffer.
+                buf = getattr(stream, "buffer", None)
+                if buf is not None:
+                    buf.write(line.encode("utf-8"))
+                    buf.flush()
+                else:
+                    stream.write(line)
+                    stream.flush()
             return True
         except BrokenPipeError:
             return False
