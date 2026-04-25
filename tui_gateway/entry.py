@@ -106,11 +106,15 @@ def _log_exit(reason: str) -> None:
 
 def main():
     # Reconfigure the *real* stdout (saved before server.py swapped it to
-    # stderr) and stderr to UTF-8 on Windows so that JSON frames containing
-    # Unicode symbols (⚕, ✓, →, etc.) don't crash on CJK codepages.
+    # stderr), stderr, and stdin to UTF-8 on Windows so that JSON frames
+    # containing Unicode (⚕, ✓, →, CJK input from the TUI, …) don't get
+    # mangled by the system code page (cp936/GBK on Chinese Windows).
+    # stdin is critical: without it, every UTF-8 byte the Node TUI sends
+    # over JSON-RPC is decoded as GBK, producing mojibake user messages
+    # ("你好" → "浣犲ソ") that get persisted to the session DB.
     if sys.platform == "win32":
         from tui_gateway.server import _real_stdout
-        for _s in (_real_stdout, sys.stderr):
+        for _s in (_real_stdout, sys.stderr, sys.stdin):
             if hasattr(_s, "reconfigure"):
                 try:
                     _s.reconfigure(encoding="utf-8", errors="replace")

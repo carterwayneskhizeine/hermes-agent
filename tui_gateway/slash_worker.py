@@ -52,6 +52,17 @@ def main():
     os.environ["HERMES_SESSION_KEY"] = args.session_key
     os.environ["HERMES_INTERACTIVE"] = "1"
 
+    # Force UTF-8 on stdio on Windows so JSON commands containing CJK
+    # (slash-command arguments, persisted user messages) don't get
+    # mangled by the system code page.
+    if sys.platform == "win32":
+        for _s in (sys.stdin, sys.stdout, sys.stderr):
+            if hasattr(_s, "reconfigure"):
+                try:
+                    _s.reconfigure(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         cli = HermesCLI(model=args.model or None, compact=True, resume=args.session_key, verbose=False)
 
