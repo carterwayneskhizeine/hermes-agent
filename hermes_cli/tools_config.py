@@ -445,7 +445,8 @@ def _run_post_setup(post_setup_key: str):
             import subprocess
             result = subprocess.run(
                 ["npm", "install", "--silent"],
-                capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT)
             )
             if result.returncode == 0:
                 _print_success("    Node.js dependencies installed")
@@ -462,7 +463,8 @@ def _run_post_setup(post_setup_key: str):
             import subprocess
             result = subprocess.run(
                 ["npm", "install", "--silent"],
-                capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT)
             )
             if result.returncode == 0:
                 _print_success("    Camofox installed")
@@ -493,7 +495,8 @@ def _run_post_setup(post_setup_key: str):
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-U", wheel_url, "soundfile", "--quiet"],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=300,
             )
             if result.returncode == 0:
                 _print_success("    kittentts installed")
@@ -548,12 +551,14 @@ def _run_post_setup(post_setup_key: str):
                 if uv_bin:
                     result = subprocess.run(
                         [uv_bin, "pip", "install", "--python", sys.executable, "-e", str(tinker_dir)],
-                        capture_output=True, text=True
+                        capture_output=True, text=True,
+                        encoding="utf-8", errors="replace"
                     )
                 else:
                     result = subprocess.run(
                         [sys.executable, "-m", "pip", "install", "-e", str(tinker_dir)],
-                        capture_output=True, text=True
+                        capture_output=True, text=True,
+                        encoding="utf-8", errors="replace"
                     )
                 if result.returncode == 0:
                     _print_success("    tinker-atropos installed")

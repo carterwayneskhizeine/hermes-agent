@@ -39,7 +39,8 @@ def _kill_port_process(port: int) -> None:
             # Use netstat to find the PID bound to this port, then taskkill
             result = subprocess.run(
                 ["netstat", "-ano", "-p", "TCP"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=5,
             )
             for line in result.stdout.splitlines():
                 parts = line.split()
@@ -78,6 +79,7 @@ def _terminate_bridge_process(proc, *, force: bool = False) -> None:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8", errors="replace",
                 timeout=10,
             )
         except FileNotFoundError:
@@ -124,6 +126,7 @@ def check_whatsapp_requirements() -> bool:
             ["node", "--version"],
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             timeout=5
         )
         return result.returncode == 0
@@ -384,6 +387,7 @@ class WhatsAppAdapter(BasePlatformAdapter):
                         cwd=str(bridge_dir),
                         capture_output=True,
                         text=True,
+                        encoding="utf-8", errors="replace",
                         timeout=60,
                     )
                     if install_result.returncode != 0:

@@ -195,6 +195,7 @@ def _ensure_docker_available() -> None:
             [docker_exe, "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             timeout=5,
         )
     except FileNotFoundError:
@@ -445,6 +446,7 @@ class DockerEnvironment(BaseEnvironment):
             run_cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             timeout=120,  # image pull may take a while
             check=True,
         )
@@ -528,7 +530,8 @@ class DockerEnvironment(BaseEnvironment):
             docker = find_docker() or "docker"
             result = subprocess.run(
                 [docker, "info", "--format", "{{.Driver}}"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=10,
             )
             driver = result.stdout.strip().lower()
             if driver != "overlay2":
@@ -538,7 +541,8 @@ class DockerEnvironment(BaseEnvironment):
             # Probe by attempting a dry-ish run — the fastest reliable check.
             probe = subprocess.run(
                 [docker, "create", "--storage-opt", "size=1m", "hello-world"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=15,
             )
             if probe.returncode == 0:
                 # Clean up the created container

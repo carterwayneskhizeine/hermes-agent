@@ -139,6 +139,7 @@ def _try_gh_cli_token() -> Optional[str]:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8", errors="replace",
                 timeout=5,
                 env=clean_env,
             )

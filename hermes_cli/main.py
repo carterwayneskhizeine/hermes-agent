@@ -616,7 +616,7 @@ def _probe_container(cmd: list, backend: str, via_sudo: bool = False):
     all other exceptions propagate naturally.
     """
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
     except subprocess.TimeoutExpired:
         label = f"sudo {backend}" if via_sudo else backend
         print(
@@ -919,6 +919,7 @@ def _ensure_tui_node() -> None:
             env={**os.environ, "HERMES_HOME": hermes_home},
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -1014,6 +1015,7 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
             cwd=str(tui_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         if result.returncode != 0:
             combined = f"{result.stdout or ''}{result.stderr or ''}".strip()
@@ -1356,6 +1358,7 @@ def cmd_whatsapp(args):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8", errors="replace",
             )
         except KeyboardInterrupt:
             print("\n  ✗ Install cancelled")
@@ -4848,6 +4851,7 @@ def _stash_local_changes_if_needed(git_cmd: list[str], cwd: Path) -> Optional[st
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
         check=True,
     )
     if not status.stdout.strip():
@@ -4862,6 +4866,7 @@ def _stash_local_changes_if_needed(git_cmd: list[str], cwd: Path) -> Optional[st
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
     )
     if unmerged.stdout.strip():
         print("→ Clearing unmerged index entries from a previous conflict...")
@@ -4883,6 +4888,7 @@ def _stash_local_changes_if_needed(git_cmd: list[str], cwd: Path) -> Optional[st
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
         check=True,
     ).stdout.strip()
     return stash_ref
@@ -4896,6 +4902,7 @@ def _resolve_stash_selector(
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
         check=True,
     )
     for line in stash_list.stdout.splitlines():
@@ -4951,6 +4958,7 @@ def _restore_stashed_changes(
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
     )
 
     # Check for unmerged (conflicted) files — can happen even when returncode is 0
@@ -4959,6 +4967,7 @@ def _restore_stashed_changes(
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
     )
     has_conflicts = bool(unmerged.stdout.strip())
 
@@ -5009,6 +5018,7 @@ def _restore_stashed_changes(
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         if drop.returncode != 0:
             print(
@@ -5050,6 +5060,7 @@ def _get_origin_url(git_cmd: list[str], cwd: Path) -> Optional[str]:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -5083,6 +5094,7 @@ def _has_upstream_remote(git_cmd: list[str], cwd: Path) -> bool:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         return result.returncode == 0
     except Exception:
@@ -5097,6 +5109,7 @@ def _add_upstream_remote(git_cmd: list[str], cwd: Path) -> bool:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         return result.returncode == 0
     except Exception:
@@ -5111,6 +5124,7 @@ def _count_commits_between(git_cmd: list[str], cwd: Path, base: str, head: str) 
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         if result.returncode == 0:
             return int(result.stdout.strip())
@@ -5147,6 +5161,7 @@ def _sync_fork_with_upstream(git_cmd: list[str], cwd: Path) -> bool:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         return result.returncode == 0
     except Exception:
@@ -5400,6 +5415,7 @@ def _update_node_dependencies() -> None:
             cwd=path,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             check=False,
         )
         if result.returncode == 0:
@@ -5686,6 +5702,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         if fetch_result.returncode != 0:
             stderr = fetch_result.stderr.strip()
@@ -5710,6 +5727,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             check=True,
         )
         current_branch = result.stdout.strip()
@@ -5732,6 +5750,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
+                encoding="utf-8", errors="replace",
                 check=True,
             )
         else:
@@ -5747,6 +5766,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             check=True,
         )
         commit_count = int(result.stdout.strip())
@@ -5768,6 +5788,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     cwd=PROJECT_ROOT,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8", errors="replace",
                     check=False,
                 )
             print("✓ Already up to date!")
@@ -5783,6 +5804,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 cwd=PROJECT_ROOT,
                 capture_output=True,
                 text=True,
+                encoding="utf-8", errors="replace",
             )
             if pull_result.returncode != 0:
                 # ff-only failed — local and remote have diverged (e.g. upstream
@@ -5796,6 +5818,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     cwd=PROJECT_ROOT,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8", errors="replace",
                 )
                 if reset_result.returncode != 0:
                     print(f"✗ Failed to reset to origin/{branch}.")
@@ -6079,7 +6102,8 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     try:
                         _verify = subprocess.run(
                             scope_cmd_ + ["is-active", svc_name_],
-                            capture_output=True, text=True, timeout=5,
+                            capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=5,
                         )
                         if _verify.stdout.strip() == "active":
                             return True
@@ -6106,7 +6130,8 @@ def _cmd_update_impl(args, gateway_mode: bool):
                             "show", svc_name_,
                             "--property=RestartUSec", "--value",
                         ],
-                        capture_output=True, text=True, timeout=5,
+                        capture_output=True, text=True,
+                        encoding="utf-8", errors="replace", timeout=5,
                     )
                 except (FileNotFoundError, subprocess.TimeoutExpired):
                     return default
@@ -6187,6 +6212,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                             ],
                             capture_output=True,
                             text=True,
+                            encoding="utf-8", errors="replace",
                             timeout=10,
                         )
                         for line in result.stdout.strip().splitlines():
@@ -6204,6 +6230,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                                 scope_cmd + ["is-active", svc_name],
                                 capture_output=True,
                                 text=True,
+                                encoding="utf-8", errors="replace",
                                 timeout=5,
                             )
                             if check.stdout.strip() != "active":
@@ -6222,7 +6249,8 @@ def _cmd_update_impl(args, gateway_mode: bool):
                                         "show", svc_name,
                                         "--property=MainPID", "--value",
                                     ],
-                                    capture_output=True, text=True, timeout=5,
+                                    capture_output=True, text=True,
+                                    encoding="utf-8", errors="replace", timeout=5,
                                 )
                                 _main_pid = int((_show.stdout or "").strip() or 0)
                             except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
@@ -6275,6 +6303,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                                 scope_cmd + ["restart", svc_name],
                                 capture_output=True,
                                 text=True,
+                                encoding="utf-8", errors="replace",
                                 timeout=15,
                             )
                             if restart.returncode == 0:
@@ -6296,6 +6325,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                                         scope_cmd + ["restart", svc_name],
                                         capture_output=True,
                                         text=True,
+                                        encoding="utf-8", errors="replace",
                                         timeout=15,
                                     )
                                     if _wait_for_service_active(
@@ -6331,6 +6361,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                             ["launchctl", "list", get_launchd_label()],
                             capture_output=True,
                             text=True,
+                            encoding="utf-8", errors="replace",
                             timeout=5,
                         )
                         if check.returncode == 0:

@@ -322,6 +322,7 @@ def cmd_install(
                 ["git", "clone", "--depth", "1", git_url, str(tmp_target)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8", errors="replace",
                 timeout=60,
             )
         except FileNotFoundError:
@@ -466,6 +467,7 @@ def cmd_update(name: str) -> None:
             ["git", "pull", "--ff-only"],
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             timeout=60,
             cwd=str(target),
         )

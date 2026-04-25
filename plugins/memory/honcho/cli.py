@@ -314,6 +314,7 @@ def _ensure_sdk_installed() -> bool:
         [sys.executable, "-m", "pip", "install", "honcho-ai>=2.0.1"],
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
     )
     if result.returncode == 0:
         print("  Installed.\n")

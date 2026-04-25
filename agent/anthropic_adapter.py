@@ -493,6 +493,7 @@ def _read_claude_code_credentials_from_keychain() -> Optional[Dict[str, Any]]:
              "-w"],
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
             timeout=5,
         )
     except (OSError, subprocess.TimeoutExpired):

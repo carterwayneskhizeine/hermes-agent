@@ -514,6 +514,7 @@ def git(*args, cwd=None):
     result = subprocess.run(
         ["git"] + list(args),
         capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         cwd=cwd or str(REPO_ROOT),
     )
     if result.returncode != 0:
@@ -528,6 +529,7 @@ def git_result(*args, cwd=None):
         ["git"] + list(args),
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
         cwd=cwd or str(REPO_ROOT),
     )
 
@@ -623,6 +625,7 @@ def build_release_artifacts(semver: str) -> list[Path]:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
     )
     if result.returncode != 0:
         print("  ⚠ Could not build Python release artifacts.")
@@ -1035,6 +1038,7 @@ def main():
             result = subprocess.run(
                 gh_cmd,
                 capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 cwd=str(REPO_ROOT),
             )
         else:

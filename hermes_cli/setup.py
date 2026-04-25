@@ -1355,12 +1355,14 @@ def setup_terminal_backend(config: dict):
                         ],
                         capture_output=True,
                         text=True,
+                        encoding="utf-8", errors="replace",
                     )
                 else:
                     result = subprocess.run(
                         [sys.executable, "-m", "pip", "install", "modal"],
                         capture_output=True,
                         text=True,
+                        encoding="utf-8", errors="replace",
                     )
                 if result.returncode == 0:
                     print_success("modal SDK installed")
@@ -1410,12 +1412,14 @@ def setup_terminal_backend(config: dict):
                     [uv_bin, "pip", "install", "--python", sys.executable, "daytona"],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8", errors="replace",
                 )
             else:
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "daytona"],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8", errors="replace",
                 )
             if result.returncode == 0:
                 print_success("daytona SDK installed")
@@ -1491,7 +1495,7 @@ def setup_terminal_backend(config: dict):
                 ssh_cmd.extend(["-p", port])
             ssh_cmd.append(f"{user}@{host}" if user else host)
             ssh_cmd.append("echo ok")
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(ssh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
             if result.returncode == 0:
                 print_success("  SSH connection successful!")
             else:
@@ -1955,11 +1959,13 @@ def _setup_matrix():
                 result = subprocess.run(
                     [uv_bin, "pip", "install", "--python", sys.executable, matrix_pkg],
                     capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
                 )
             else:
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", matrix_pkg],
                     capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
                 )
             if result.returncode == 0:
                 print_success(f"{matrix_pkg} installed")

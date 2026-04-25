@@ -10,6 +10,7 @@ import codecs
 import json
 import logging
 import os
+import platform
 import select
 import shlex
 import subprocess
@@ -19,6 +20,8 @@ import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import IO, Callable, Protocol
+
+_IS_WINDOWS = platform.system() == "Windows"
 
 from hermes_constants import get_hermes_home
 from tools.interrupt import is_interrupted
@@ -126,6 +129,7 @@ def _popen_bash(
         stderr=subprocess.STDOUT,
         stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
         text=True,
+        encoding="utf-8", errors="replace",
         **kwargs,
     )
     if stdin_data is not None:
@@ -474,7 +478,7 @@ class BaseEnvironment(ABC):
         # U+FFFD substitution rather than clobbering the whole buffer.
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
-        def _drain():
+        def _drain_posix():
             fd = proc.stdout.fileno()
             idle_after_exit = 0
             try:
@@ -500,15 +504,41 @@ class BaseEnvironment(ABC):
                         if idle_after_exit >= 3:
                             break
             finally:
-                # Flush any bytes buffered mid-sequence.  With ``errors="replace"``
-                # this emits U+FFFD for any final incomplete sequence rather than
-                # raising.
                 try:
                     tail = decoder.decode(b"", final=True)
                     if tail:
                         output_chunks.append(tail)
                 except Exception:
                     pass
+
+        def _drain_windows():
+            # select() on Windows only works with sockets — pipe fds raise
+            # OSError WinError 10038, which would silently kill the drain
+            # loop and leave output empty.  Use blocking read1() on the
+            # underlying BufferedReader instead.  Since LocalEnvironment on
+            # Windows doesn't use setsid/process groups, the grandchild-pipe
+            # concern that motivated select() on POSIX doesn't apply: when
+            # bash exits, its single child pipe writer closes and read1()
+            # returns b"" cleanly.
+            buf = proc.stdout.buffer if hasattr(proc.stdout, "buffer") else proc.stdout
+            try:
+                while True:
+                    try:
+                        chunk = buf.read1(4096)
+                    except (ValueError, OSError):
+                        break
+                    if not chunk:
+                        break  # EOF
+                    output_chunks.append(decoder.decode(chunk))
+            finally:
+                try:
+                    tail = decoder.decode(b"", final=True)
+                    if tail:
+                        output_chunks.append(tail)
+                except Exception:
+                    pass
+
+        _drain = _drain_windows if _IS_WINDOWS else _drain_posix
 
         drain_thread = threading.Thread(target=_drain, daemon=True)
         drain_thread.start()
