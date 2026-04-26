@@ -1487,6 +1487,7 @@ def _(rid, params: dict) -> dict:
     sid = uuid.uuid4().hex[:8]
     key = _new_session_key()
     cols = int(params.get("cols", 80))
+    ephemeral = bool(params.get("ephemeral"))
     _enable_gateway_prompts()
 
     ready = threading.Event()
@@ -1498,6 +1499,7 @@ def _(rid, params: dict) -> dict:
         "attached_images": [],
         "cols": cols,
         "edit_snapshots": {},
+        "ephemeral": ephemeral,
         "history": [],
         "history_lock": threading.Lock(),
         "history_version": 0,
@@ -1537,7 +1539,7 @@ def _(rid, params: dict) -> dict:
                 _clear_session_context(tokens)
 
             db = _get_db()
-            if db is not None:
+            if db is not None and not ephemeral:
                 db.create_session(key, source="tui", model=_resolve_model())
             session["agent"] = agent
 
@@ -1846,6 +1848,13 @@ def _(rid, params: dict) -> dict:
             worker.close()
     except Exception:
         pass
+    if session.get("ephemeral"):
+        try:
+            db = _get_db()
+            if db is not None:
+                db.delete_session(session["session_key"])
+        except Exception:
+            pass
     return _ok(rid, {"closed": True})
 
 

@@ -88,6 +88,7 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let sidecarSid: string | null = null;
     const offState = gw.onState(setState);
 
     const offSessionInfo = gw.on<SessionInfo>("session.info", (ev) => {
@@ -111,17 +112,21 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
     // Adopt whichever session the gateway hands us. session.create on the
     // sidecar is independent of the PTY pane's session by design — we
     // only need a sid to drive the model picker's slash.exec calls.
+    // ephemeral prevents a database row so the Sessions page stays clean.
     gw.connect()
       .then(() => {
         if (cancelled) {
           return;
         }
-        return gw.request<{ session_id: string }>("session.create", {});
+        return gw.request<{ session_id: string }>("session.create", {
+          ephemeral: true,
+        });
       })
       .then((created) => {
         if (cancelled || !created?.session_id) {
           return;
         }
+        sidecarSid = created.session_id;
         setSessionId(created.session_id);
       })
       .catch((e: Error) => {
@@ -135,6 +140,11 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
       offState();
       offSessionInfo();
       offError();
+      if (sidecarSid) {
+        gw.request("session.close", { session_id: sidecarSid }).catch(
+          () => {},
+        );
+      }
       gw.close();
     };
   }, [gw]);
