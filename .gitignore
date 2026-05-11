@@ -72,3 +72,4 @@ website/static/api/skills-index.json
 .claude/settings.local.json
 .claude/skills/sync-repos/SKILL.md
 models-dev-upstream/
+.kilo/kilo.json
